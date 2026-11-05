@@ -129,7 +129,7 @@ header { display: flex; align-items: baseline; justify-content: space-between; g
   .cols { display: none; }
   .chan { grid-template-columns: 3ch 1fr 1fr; row-gap: 8px; }
   .chan .t { grid-column: 2 / -1; }
-  .chan .prog.now { grid-column: 2; }
+  .chan .prog.onair { grid-column: 2; }
   .chan .prog.later { display: none; }
   .prog time::before { content: attr(data-k) " "; color: var(--dim); }
 }
@@ -384,7 +384,7 @@ function progCell(cls, k) {
   const tm = document.createElement("time"); tm.dataset.k = k;
   const b = document.createElement("b"); b.textContent = "…";
   s.append(tm, b);
-  if (cls === "now") { const bar = document.createElement("span"); bar.className = "bar"; bar.append(document.createElement("i")); s.append(bar); }
+  if (cls === "onair") { const bar = document.createElement("span"); bar.className = "bar"; bar.append(document.createElement("i")); s.append(bar); }
   return s;
 }
 function renderGuide() {
@@ -400,7 +400,7 @@ function renderGuide() {
       x.onclick = e => { e.stopPropagation(); custom = custom.filter(k => k.q !== c.q); store.set("re_custom", custom); if (cur >= channels().length) cur = 0; renderGuide(); tune(cur); };
       t.append(x);
     }
-    const cells = [progCell("now", "Now"), progCell("next", "Next"), progCell("later", "Later")];
+    const cells = [progCell("onair", "Now"), progCell("next", "Next"), progCell("later", "Later")];
     b.append(n, t, ...cells);
     b.onclick = () => { tune(i); $("screen").scrollIntoView({ behavior: "smooth", block: "nearest" }); };
     $("chans").append(b);
