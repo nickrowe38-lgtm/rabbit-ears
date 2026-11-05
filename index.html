@@ -350,12 +350,32 @@ async function buildBlock(ch, b) {
   return items;
 }
 
+// Channels with only a few videos would often air the same show twice in a row (the previous
+// block's last show running over, then this block joining that same show partway through).
+// For those, leave the previous block's last show out of this block.
+const planCache = {};
+function planBlock(ch, b) {
+  const key = ch.q + "|" + b;
+  if (!planCache[key]) planCache[key] = (async () => {
+    const [ids, raw] = await Promise.all([getList(ch), blockSchedule(ch, b)]);
+    if (ids.length >= 60) return raw;
+    const prev = await blockSchedule(ch, b - 1).catch(() => null);
+    const skip = prev?.[prev.length - 1].m.id;
+    const pool = raw.map(p => p.m).filter((m, i, a) => m.id !== skip && a.findIndex(x => x.id === m.id) === i);
+    if (!skip || !pool.length || !raw.some(p => p.m.id === skip)) return raw;
+    const start = blockStart(b), end = start + BLOCK, items = [];
+    for (let t = start, k = 0; t < end; k++) { const m = pool[k % pool.length]; items.push({ m, start: t, end: t + m.dur, v0: t }); t += m.dur; }
+    return items;
+  })().catch(e => { delete planCache[key]; throw e; });
+  return planCache[key];
+}
+
 // What actually airs in block b: if the previous block's last show ran over, this block
 // picks up once it ends (joining a show already in progress if one is).
 function effBlock(ch, b) {
   const key = ch.q + "|" + b;
   if (!effCache[key]) effCache[key] = (async () => {
-    const [prev, items] = await Promise.all([blockSchedule(ch, b - 1).catch(() => null), blockSchedule(ch, b)]);
+    const [prev, items] = await Promise.all([planBlock(ch, b - 1).catch(() => null), planBlock(ch, b)]);
     const cutoff = Math.max(blockStart(b), prev ? prev[prev.length - 1].end : 0);
     return items.filter(p => p.end > cutoff).map(p => p.start < cutoff ? { ...p, start: cutoff } : p);
   })().catch(e => { delete effCache[key]; throw e; });
