@@ -236,6 +236,8 @@ const BUILT_IN = [
   { name: "Rink Side",          desc: "Ice hockey games",                  q: 'subject:"ice hockey"' },
   { name: "Adult Swim",         desc: "Adult Swim shows and live streams", q: 'subject:"adult swim"' },
   { name: "Y2K WB",             desc: "Early-2000s WB shows, promos, ads", q: '(subject:"the wb" OR title:"the wb" OR title:"(WB)" OR title:"WB commercials" OR title:"kids wb" OR title:"WB/WPIX" OR title:"gilmore girls") AND date:[1999-01-01 TO 2006-12-31] AND NOT title:(madonna OR township)' },
+  { name: "PBS",                desc: "NOVA, Frontline, Bob Ross and more", q: '(subject:pbs OR title:pbs) AND title:(nova OR frontline OR "american experience" OR "great performances" OR masterpiece OR "ken burns" OR "this old house" OR "antiques roadshow" OR "bob ross" OR "joy of painting" OR cosmos OR "power of myth" OR "mister rogers" OR "reading rainbow" OR nature OR "austin city limits") AND NOT collection:tvnews' },
+  { name: "Brit TV",            desc: "British comedy and drama",          q: 'subject:("british television" OR "british tv" OR "british comedy" OR "british sitcom" OR "fawlty towers" OR "monty python" OR "only fools and horses" OR "are you being served" OR "keeping up appearances" OR "red dwarf" OR "blackadder" OR "the prisoner" OR "benny hill") AND NOT collection:tvnews AND NOT title:("funny or die" OR bbcnews)' },
   // The Archive has no Gilmore Girls episodes, so this is a hand-picked list of the real clips, promos and the Season 2 premiere tape.
   { name: "Gilmore Girls",      desc: "Promos, clips and a Season 2 tape", q: "identifier:(turner_video_136082 OR cameo-by-scottpatterson-via-cameo OR NJY-011_422161-422459 OR NJY-011_710526-711428 OR NJY-011_740665-740962 OR studio-project-26_202304 OR spautx-Gilmore_Girls_Cast_Interviews_-_ATX_2015_Reunion OR bliptv-20131013-214814-AnyoneButMe-LizaWeilGilmoreGirlsBadGirlWantsHerABM920 OR MelissaMccarthyGilmoreGirls_20250425_1 OR NJY-011_393234-394135 OR dvd-d-vlc-media-player-2023-06-15-20-25-37 OR 20251208-083214 OR 20251122-201151 OR 20251208-083325 OR turner_video_136084 OR NJY-011_101520-101814 OR gilmore-girls-lost-episode-ending-15-vhs-edition OR NJY-011_72674-73582 OR turner_video_136081 OR wb-s-2-gilmore-girls-angel-and-abc-thieves OR turner_video_136083 OR youtube-z7S08wuL5Sg)" },
 ];
@@ -304,9 +306,11 @@ async function getMeta(id) {
 }
 const fileUrl = m => `https://archive.org/download/${encodeURIComponent(m.id)}/${m.file.split("/").map(encodeURIComponent).join("/")}`;
 
-// Build one channel's lineup for one 3-hour block: [{m, start, end}] in epoch seconds.
+// Build one channel's planned lineup for one 3-hour block: [{m, start, end, v0}] in epoch
+// seconds, where v0 is when the video's own clock reads 0:00. Programs play back to back and
+// the last one may run past the end of the block; it always plays in full.
 // Same inputs give the same lineup on every device.
-const schedCache = {};
+const schedCache = {}, effCache = {};
 function blockSchedule(ch, b) {
   const key = ch.q + "|" + b;
   if (!schedCache[key]) schedCache[key] = buildBlock(ch, b).catch(e => { delete schedCache[key]; throw e; });
@@ -317,9 +321,9 @@ async function buildBlock(ch, b) {
   if (!ids.length) throw new Error("empty");
   const start = blockStart(b), end = start + BLOCK, first = hash(ch.q + ":" + b) % ids.length;
   const MAX_SCAN = Math.min(ids.length, 90), BATCH = 10;
-  const items = [], fitting = [];
-  let t = start, scanned = 0, skips = 0, batch = [];
-  while (t < end - 30 && scanned < MAX_SCAN) {
+  const items = [];
+  let t = start, scanned = 0, batch = [];
+  while (t < end && scanned < MAX_SCAN) {
     if (!batch.length) {
       const slice = [];
       for (let k = 0; k < BATCH && scanned + k < MAX_SCAN; k++) slice.push(ids[(first + scanned + k) % ids.length]);
@@ -327,26 +331,34 @@ async function buildBlock(ch, b) {
     }
     const m = batch.shift(); scanned++;
     if (!m) continue;
-    const left = end - t;
-    if (m.dur > BLOCK && t === start) { items.push({ m, start: t, end }); t = end; } // extra-long tape: gets the whole block
-    else if (m.dur <= left) { items.push({ m, start: t, end: t + m.dur }); fitting.push(m); t += m.dur; skips = 0; }
-    else if (left < 15 * 60 || ++skips > 15) { items.push({ m, start: t, end }); t = end; } // nothing fits: last show gets cut
+    items.push({ m, start: t, end: t + m.dur, v0: t }); t += m.dur;
   }
   if (!items.length) throw new Error("no playable");
   // Ran out of candidates before the block filled: rerun what we have.
-  for (let k = 0; t < end - 30; k++) { const m = fitting[k % fitting.length] || items[0].m; const e = Math.min(end, t + m.dur); items.push({ m, start: t, end: e }); t = e; }
-  items[items.length - 1].end = end;
+  for (let k = 0; t < end; k++) { const m = items[k].m; items.push({ m, start: t, end: t + m.dur, v0: t }); t += m.dur; }
   return items;
 }
 
-// Programs airing from time t onward (crossing into the next block if needed).
+// What actually airs in block b: if the previous block's last show ran over, this block
+// picks up once it ends (joining a show already in progress if one is).
+function effBlock(ch, b) {
+  const key = ch.q + "|" + b;
+  if (!effCache[key]) effCache[key] = (async () => {
+    const [prev, items] = await Promise.all([blockSchedule(ch, b - 1).catch(() => null), blockSchedule(ch, b)]);
+    const cutoff = Math.max(blockStart(b), prev ? prev[prev.length - 1].end : 0);
+    return items.filter(p => p.end > cutoff).map(p => p.start < cutoff ? { ...p, start: cutoff } : p);
+  })().catch(e => { delete effCache[key]; throw e; });
+  return effCache[key];
+}
+
+// Programs airing from time t onward. A show that runs over still belongs to the block it
+// started in, so look one block back too.
 async function lineup(ch, t, count) {
-  let b = blockOf(t), out = [];
-  while (out.length < count) {
-    const items = await blockSchedule(ch, b);
+  const b0 = blockOf(t), out = [];
+  for (let b = b0 - 1; b <= b0 + 2 && out.length < count; b++) {
+    let items;
+    try { items = await effBlock(ch, b); } catch (e) { if (b < b0) continue; throw e; }
     out.push(...items.filter(p => p.end > t));
-    b++;
-    if (b > blockOf(t) + 2) break;
   }
   return out.slice(0, count);
 }
@@ -354,7 +366,7 @@ async function lineup(ch, t, count) {
 async function whatsOn(ch) {
   const t = nowSec();
   const [p, next] = await lineup(ch, t, 2);
-  return { p, next, offset: t - p.start };
+  return { p, next, offset: t - p.v0 };
 }
 
 // ---------- UI ----------
@@ -467,7 +479,7 @@ async function tune(i) {
     const m = p.m;
     vid.src = fileUrl(m);
     vid.onloadedmetadata = () => {
-      const want = nowSec() - p.start;
+      const want = nowSec() - p.v0;
       if (want >= vid.duration - 1) return waitForNext(my);
       vid.currentTime = want; vid.play().catch(() => {});
     };
@@ -494,7 +506,7 @@ setInterval(() => {
   if (!playing) return;
   if (t >= playing.end) return tune(cur);
   if (!vid.paused && !vid.seeking) {
-    const want = t - playing.start;
+    const want = t - playing.v0;
     if (Math.abs(vid.currentTime - want) > 20 && want < vid.duration - 1) vid.currentTime = want; // caught up after buffering
     const ch = channels()[cur], m = playing.m;
     $("meta").textContent = `${ch.name}${m.year ? " · " + m.year : ""} · ${clockFmt(playing.start)}–${clockFmt(playing.end)} · ${fmt(vid.currentTime)} in`;
