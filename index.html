@@ -436,9 +436,8 @@ function renderGuide() {
   // Only look up listings for rows someone can see.
   rowObserver?.disconnect();
   rowObserver = "IntersectionObserver" in window ? new IntersectionObserver(es => {
-    let fresh = false;
-    es.forEach(e => { const r = rows.find(r => r.el === e.target); if (r && e.isIntersecting && !r.seen) { r.seen = true; fresh = true; } });
-    if (fresh) fillGuide();
+    es.forEach(e => { const r = rows.find(r => r.el === e.target); if (!r) return; r.visible = e.isIntersecting; if (e.isIntersecting) r.seen = true; });
+    fillGuide();
   }, { rootMargin: "200px" }) : null;
   rows.forEach(r => rowObserver ? rowObserver.observe(r.el) : (r.seen = true));
   fillGuide();
@@ -458,28 +457,23 @@ function paintRow(r, progs) {
     if (k === 0) cell.querySelector(".bar i").style.width = Math.min(100, (t - p.start) / (p.end - p.start) * 100) + "%";
   });
 }
-let filling = null, fillAgain = false;
+// Up to 3 rows load at once. Each time a slot frees up it takes, in order: the channel you're
+// watching, then rows on screen right now, then rows seen earlier. Rows painted in the last
+// minute are skipped.
+let workers = 0;
+function nextRow() {
+  const t = Date.now();
+  const due = rows.filter((r, i) => !r.busy && (r.seen || i === cur) && t - r.painted > 55000);
+  return due.find(r => r === rows[cur]) || due.find(r => r.visible) || due[0];
+}
 function fillGuide() {
-  if (filling) { fillAgain = true; return filling; }
-  // The channel you're watching first, then visible rows top to bottom, a few at a time.
-  // Rows painted in the last minute are skipped.
-  const list = rows, t = Date.now();
-  const order = list.map((_, i) => i)
-    .filter(i => (list[i].seen || i === cur) && t - list[i].painted > 55000)
-    .sort((a, b) => (b === cur) - (a === cur));
-  const worker = async () => {
-    while (order.length && list === rows) {
-      const r = list[order.shift()];
-      try { paintRow(r, await lineup(r.ch, nowSec(), 3)); }
-      catch { paintRow(r, []); }
-      r.painted = Date.now();
-    }
-  };
-  filling = Promise.all([worker(), worker(), worker()]).finally(() => {
-    filling = null;
-    if (fillAgain) { fillAgain = false; fillGuide(); }
-  });
-  return filling;
+  while (workers < 3) {
+    const r = nextRow();
+    if (!r) return;
+    workers++; r.busy = true;
+    lineup(r.ch, nowSec(), 3).then(p => paintRow(r, p), () => paintRow(r, []))
+      .finally(() => { r.busy = false; r.painted = Date.now(); workers--; fillGuide(); });
+  }
 }
 
 // ---------- Tuning ----------
