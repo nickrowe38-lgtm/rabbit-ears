@@ -320,7 +320,7 @@ async function buildBlock(ch, b) {
   const ids = await getList(ch);
   if (!ids.length) throw new Error("empty");
   const start = blockStart(b), end = start + BLOCK, first = hash(ch.q + ":" + b) % ids.length;
-  const MAX_SCAN = Math.min(ids.length, 90), BATCH = 10;
+  const MAX_SCAN = Math.min(ids.length, 90), BATCH = 30;
   const items = [];
   let t = start, scanned = 0, batch = [];
   while (t < end && scanned < MAX_SCAN) {
@@ -441,17 +441,18 @@ function paintRow(r, progs) {
 let filling = null;
 function fillGuide() {
   if (filling) return filling;
-  // Fill the channel you're watching first, then the rest top to bottom, one at a time
+  // Fill the channel you're watching first, then the rest top to bottom, a few at a time
   // so the Internet Archive isn't hit with everything at once.
   const order = rows.map((_, i) => i).sort((a, b) => (b === cur) - (a === cur));
   const list = rows;
-  filling = (async () => {
-    for (const i of order) {
-      if (list !== rows) break;
+  const worker = async () => {
+    while (order.length && list === rows) {
+      const i = order.shift();
       try { paintRow(list[i], await lineup(list[i].ch, nowSec(), 3)); }
       catch { paintRow(list[i], []); }
     }
-  })().finally(() => { filling = null; });
+  };
+  filling = Promise.all([worker(), worker(), worker(), worker()]).finally(() => { filling = null; });
   return filling;
 }
 
