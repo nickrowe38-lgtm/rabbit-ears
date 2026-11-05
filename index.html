@@ -184,6 +184,14 @@ const BUILT_IN = [
   { name: "Computer Chronicles",desc: "The 80s–90s PC show",               q: "collection:computerchronicles" },
   { name: "Rerun Alley",        desc: "Old TV episodes",                   q: "collection:classic_tv" },
   { name: "Drive-In",           desc: "Feature films",                     q: "collection:feature_films" },
+  { name: "Anime Station",      desc: "Anime series and films",            q: "collection:anime" },
+  { name: "Dubbed Anime",       desc: "English-dubbed anime",              q: 'subject:anime AND subject:"english dub"' },
+  { name: "Retro Anime",        desc: "Astro Boy, Speed Racer, Kimba",     q: 'subject:"astro boy" OR subject:"speed racer" OR subject:"kimba" OR subject:"gigantor"' },
+  { name: "AMV Hour",           desc: "Fan-made anime music videos",       q: "subject:amv" },
+  { name: "Cartoon Vault",      desc: "Vintage studio cartoons",           q: "collection:vintage_cartoons" },
+  { name: "Silent Screen",      desc: "Silent-era films",                  q: "collection:silent_films" },
+  { name: "Laugh Track",        desc: "Classic comedy films",              q: "collection:Comedy_Films" },
+  { name: "Mission Control",    desc: "NASA launches and missions",        q: "collection:nasa" },
 ];
 const SLOT = 30 * 60;                     // each channel picks a new start item every 30 min
 const EPOCH = Date.UTC(2026, 0, 1) / 1000; // shared clock origin
