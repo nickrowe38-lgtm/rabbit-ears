@@ -102,20 +102,46 @@ header { display: flex; align-items: baseline; justify-content: space-between; g
 /* Guide */
 .guide { display: grid; gap: 10px; }
 .guide h3 { margin: 0; font-size: .78rem; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); font-weight: 600; }
-.chans { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); gap: 8px; }
+.guide-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.guide-head .clock { font-family: var(--osd); font-size: 1.3rem; color: var(--phosphor); }
+.chans { display: grid; gap: 6px; }
+.cols, .chan { display: grid; grid-template-columns: 3ch minmax(8rem, 11rem) 1fr 1fr 1fr; gap: 12px; align-items: center; }
+.cols { padding: 0 14px; font-size: .72rem; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+.cols span:first-child { grid-column: 3; }
 .chan {
   text-align: left; appearance: none; background: var(--panel); border: 1px solid var(--line); color: var(--ink);
-  border-radius: 12px; padding: 12px 14px; cursor: pointer; display: grid; grid-template-columns: 3ch 1fr auto; gap: 10px; align-items: center; font: inherit;
+  border-radius: 12px; padding: 10px 14px; cursor: pointer; font: inherit; min-width: 0;
 }
+.chan:hover { border-color: var(--amber); }
 .chan .n { font-family: var(--osd); font-size: 1.6rem; color: var(--phosphor); }
-.chan .t { font-weight: 600; }
-.chan .d { display: block; color: var(--dim); font-size: .85rem; font-weight: 400; }
+.chan .t { font-weight: 600; min-width: 0; }
+.chan .d { display: block; color: var(--dim); font-size: .8rem; font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chan.on { border-color: var(--phosphor); box-shadow: 0 0 0 1px var(--phosphor) inset; }
-.chan .x { color: var(--dim); font-size: .8rem; padding: 4px 6px; border-radius: 6px; }
+.prog { min-width: 0; display: grid; gap: 2px; font-size: .88rem; }
+.prog time { font-family: var(--osd); font-size: 1.1rem; color: var(--amber); line-height: 1; }
+.prog b { font-weight: 400; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+.prog.wait b { color: var(--dim); }
+.bar { height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--phosphor); }
+.chan .x { color: var(--dim); font-size: .8rem; padding: 4px 6px; border-radius: 6px; justify-self: start; }
 .chan .x:hover { color: var(--amber); }
+@media (max-width: 760px) {
+  .cols { display: none; }
+  .chan { grid-template-columns: 3ch 1fr 1fr; row-gap: 8px; }
+  .chan .t { grid-column: 2 / -1; }
+  .chan .prog.now { grid-column: 2; }
+  .chan .prog.later { display: none; }
+  .prog time::before { content: attr(data-k) " "; color: var(--dim); }
+}
 
 form.add { display: grid; grid-template-columns: 1fr 2fr auto; gap: 8px; }
 form.add input { min-width: 0; background: var(--bg); border: 1px solid var(--line); color: var(--ink); border-radius: 10px; padding: 12px; font: inherit; }
+form.suggest { display: grid; grid-template-columns: 12rem 1fr auto; gap: 8px; align-items: start; }
+form.suggest select, form.suggest textarea { min-width: 0; background: var(--bg); border: 1px solid var(--line); color: var(--ink); border-radius: 10px; padding: 12px; font: inherit; }
+form.suggest textarea { resize: vertical; min-height: 46px; }
+select:focus-visible, textarea:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.hint a { color: var(--amber); }
+@media (max-width: 640px) { form.suggest { grid-template-columns: 1fr; } }
 .hint { color: var(--dim); font-size: .85rem; margin: 0; max-width: 65ch; }
 .hint code { font-family: var(--osd); font-size: 1.05em; color: var(--ink); }
 @media (max-width: 560px) { form.add { grid-template-columns: 1fr; } }
@@ -125,10 +151,7 @@ form.add input { min-width: 0; background: var(--bg); border: 1px solid var(--li
 <body>
 <div class="wrap">
   <header>
-    <div>
-      <h1 class="brand">Rabbit<span>·</span>Ears</h1>
-      <p class="byline">Made by Nick Rowe</p>
-    </div>
+    <h1 class="brand">Rabbit<span>·</span>Ears</h1>
     <p class="tag">Forgotten Internet Archive video, on the air around the clock.</p>
   </header>
 
@@ -157,11 +180,13 @@ form.add input { min-width: 0; background: var(--bg); border: 1px solid var(--li
     <span class="k">Now playing</span>
     <h2 id="title">Warming up the tubes…</h2>
     <span class="meta" id="meta"></span>
+    <span class="meta" id="upnext"></span>
     <a id="link" href="https://archive.org" target="_blank" rel="noopener">View on the Internet Archive</a>
   </section>
 
   <section class="guide">
-    <h3>Channel guide</h3>
+    <div class="guide-head"><h3>TV guide</h3><span class="clock" id="clock"></span></div>
+    <div class="cols" aria-hidden="true"><span>Now</span><span>Next</span><span>Later</span></div>
     <div class="chans" id="chans"></div>
     <h3>Add your own channel</h3>
     <form class="add" id="add">
@@ -170,6 +195,21 @@ form.add input { min-width: 0; background: var(--bg); border: 1px solid var(--li
       <button class="btn" type="submit">Add</button>
     </form>
     <p class="hint">Any Internet Archive search works, like <code>collection:prelinger</code> or <code>subject:"roller derby"</code>. Everyone who adds the same search sees the same schedule.</p>
+  </section>
+
+  <section class="guide">
+    <h3>Suggestion box</h3>
+    <form class="suggest" id="suggest">
+      <select id="sugKind" aria-label="Suggestion type">
+        <option>Channel idea</option>
+        <option>Feature request</option>
+        <option>Something's broken</option>
+      </select>
+      <textarea id="sugText" rows="3" required maxlength="2000" placeholder="What should Rabbit Ears add? e.g. a channel of 80s music videos"></textarea>
+      <button class="btn" type="submit">Send suggestion</button>
+    </form>
+    <p class="hint" id="sugDone" hidden>Thanks! Finish posting it in the GitHub tab that just opened.</p>
+    <p class="hint">Suggestions are posted publicly on GitHub, which needs a free account. <a href="https://github.com/nickrowe38-lgtm/rabbit-ears/issues" target="_blank" rel="noopener">See what others have suggested</a>.</p>
   </section>
 </div>
 
@@ -192,9 +232,18 @@ const BUILT_IN = [
   { name: "Silent Screen",      desc: "Silent-era films",                  q: "collection:silent_films" },
   { name: "Laugh Track",        desc: "Classic comedy films",              q: "collection:Comedy_Films" },
   { name: "Mission Control",    desc: "NASA launches and missions",        q: "collection:nasa" },
+  { name: "Gridiron",           desc: "College and high school football",  q: 'subject:"american football" OR subject:"college football"' },
+  { name: "Rink Side",          desc: "Ice hockey games",                  q: 'subject:"ice hockey"' },
+  { name: "Adult Swim",         desc: "Adult Swim shows and live streams", q: 'subject:"adult swim"' },
 ];
-const SLOT = 30 * 60;                     // each channel picks a new start item every 30 min
+// The schedule is built in 3-hour blocks. Each block starts at a seeded spot in the
+// channel's shuffled list and plays programs back to back, skipping any program that
+// wouldn't finish before the block ends, so shows play to the end.
+const BLOCK = 3 * 3600;
 const EPOCH = Date.UTC(2026, 0, 1) / 1000; // shared clock origin
+const nowSec = () => Date.now() / 1000;
+const blockOf = t => Math.floor((t - EPOCH) / BLOCK);
+const blockStart = b => EPOCH + b * BLOCK;
 
 const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
@@ -234,6 +283,8 @@ async function getList(ch) {
 }
 async function getMeta(id) {
   if (id in metaCache) return metaCache[id];
+  const saved = store.get("re_m_" + id, undefined);
+  if (saved !== undefined) return (metaCache[id] = saved);
   try {
     const d = await (await fetch("https://archive.org/metadata/" + encodeURIComponent(id))).json();
     const files = (d.files || []).filter(f => /\.mp4$/i.test(f.name) && parseLen(f.length) > 5);
@@ -244,35 +295,70 @@ async function getMeta(id) {
       title: [].concat(d.metadata?.title || id)[0],
       year: [].concat(d.metadata?.year || d.metadata?.date || "")[0].toString().slice(0, 4),
     } : null;
-  } catch { metaCache[id] = null; }
+    store.set("re_m_" + id, metaCache[id]);
+  } catch { metaCache[id] = null; } // network errors aren't saved, so they get retried next load
   return metaCache[id];
 }
 const fileUrl = m => `https://archive.org/download/${encodeURIComponent(m.id)}/${m.file.split("/").map(encodeURIComponent).join("/")}`;
 
-// Work out what's on right now: pick a start item for this 30-min slot, then walk forward.
-async function whatsOn(ch) {
+// Build one channel's lineup for one 3-hour block: [{m, start, end}] in epoch seconds.
+// Same inputs give the same lineup on every device.
+const schedCache = {};
+function blockSchedule(ch, b) {
+  const key = ch.q + "|" + b;
+  if (!schedCache[key]) schedCache[key] = buildBlock(ch, b).catch(e => { delete schedCache[key]; throw e; });
+  return schedCache[key];
+}
+async function buildBlock(ch, b) {
   const ids = await getList(ch);
   if (!ids.length) throw new Error("empty");
-  const now = Date.now() / 1000 - EPOCH;
-  const slot = Math.floor(now / SLOT);
-  let offset = now - slot * SLOT;
-  let i = hash(ch.q + ":" + slot) % ids.length;
-  let last = null;
-  for (let hop = 0; hop < 12; hop++) {
-    const m = await getMeta(ids[(i + hop) % ids.length]);
+  const start = blockStart(b), end = start + BLOCK, first = hash(ch.q + ":" + b) % ids.length;
+  const MAX_SCAN = Math.min(ids.length, 90), BATCH = 10;
+  const items = [], fitting = [];
+  let t = start, scanned = 0, skips = 0, batch = [];
+  while (t < end - 30 && scanned < MAX_SCAN) {
+    if (!batch.length) {
+      const slice = [];
+      for (let k = 0; k < BATCH && scanned + k < MAX_SCAN; k++) slice.push(ids[(first + scanned + k) % ids.length]);
+      batch = await Promise.all(slice.map(getMeta));
+    }
+    const m = batch.shift(); scanned++;
     if (!m) continue;
-    last = m;
-    if (offset < m.dur) return { m, offset, slot };
-    offset -= m.dur;
+    const left = end - t;
+    if (m.dur <= left) { items.push({ m, start: t, end: t + m.dur }); fitting.push(m); t += m.dur; skips = 0; }
+    else if (left < 15 * 60 || ++skips > 15) { items.push({ m, start: t, end }); t = end; } // nothing fits: last show gets cut
   }
-  if (!last) throw new Error("no playable");
-  return { m: last, offset: offset % last.dur, slot };
+  if (!items.length) throw new Error("no playable");
+  // Ran out of candidates before the block filled: rerun what we have.
+  for (let k = 0; t < end - 30; k++) { const m = fitting[k % fitting.length] || items[0].m; const e = Math.min(end, t + m.dur); items.push({ m, start: t, end: e }); t = e; }
+  items[items.length - 1].end = end;
+  return items;
+}
+
+// Programs airing from time t onward (crossing into the next block if needed).
+async function lineup(ch, t, count) {
+  let b = blockOf(t), out = [];
+  while (out.length < count) {
+    const items = await blockSchedule(ch, b);
+    out.push(...items.filter(p => p.end > t));
+    b++;
+    if (b > blockOf(t) + 2) break;
+  }
+  return out.slice(0, count);
+}
+
+async function whatsOn(ch) {
+  const t = nowSec();
+  const [p, next] = await lineup(ch, t, 2);
+  return { p, next, offset: t - p.start };
 }
 
 // ---------- UI ----------
 const $ = id => document.getElementById(id);
 const vid = $("vid"), snow = $("snow"), ctx = snow.getContext("2d");
-let cur = store.get("re_ch", 0), tuneId = 0, playingSlot = null, osdTimer;
+let cur = store.get("re_ch", 0), tuneId = 0, playing = null, osdTimer, waitTimer;
+const clockFmt = t => new Date(t * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+const num = i => String(i + 1).padStart(2, "0");
 
 function drawSnow() {
   if (snow.style.opacity !== "0") {
@@ -291,60 +377,126 @@ function showOSD(text, lower) {
   osdTimer = setTimeout(() => { $("osd").classList.add("fade"); $("lower").classList.add("fade"); }, 4000);
 }
 
+// ---------- TV guide ----------
+let rows = [];
+function progCell(cls, k) {
+  const s = document.createElement("span"); s.className = "prog wait " + cls;
+  const tm = document.createElement("time"); tm.dataset.k = k;
+  const b = document.createElement("b"); b.textContent = "…";
+  s.append(tm, b);
+  if (cls === "now") { const bar = document.createElement("span"); bar.className = "bar"; bar.append(document.createElement("i")); s.append(bar); }
+  return s;
+}
 function renderGuide() {
   $("chans").innerHTML = "";
-  channels().forEach((c, i) => {
+  rows = channels().map((c, i) => {
     const b = document.createElement("button");
     b.type = "button"; b.className = "chan" + (i === cur ? " on" : "");
-    b.innerHTML = `<span class="n">${String(i + 1).padStart(2, "0")}</span><span class="t"></span>`;
-    b.querySelector(".t").append(c.name, Object.assign(document.createElement("span"), { className: "d", textContent: c.desc || c.q }));
+    const n = Object.assign(document.createElement("span"), { className: "n", textContent: num(i) });
+    const t = Object.assign(document.createElement("span"), { className: "t" });
+    t.append(c.name, Object.assign(document.createElement("span"), { className: "d", textContent: c.desc || c.q }));
     if (c.custom) {
       const x = document.createElement("span"); x.className = "x"; x.textContent = "Remove"; x.setAttribute("role", "button");
       x.onclick = e => { e.stopPropagation(); custom = custom.filter(k => k.q !== c.q); store.set("re_custom", custom); if (cur >= channels().length) cur = 0; renderGuide(); tune(cur); };
-      b.append(x);
-    } else b.append(document.createElement("span"));
-    b.onclick = () => tune(i);
+      t.append(x);
+    }
+    const cells = [progCell("now", "Now"), progCell("next", "Next"), progCell("later", "Later")];
+    b.append(n, t, ...cells);
+    b.onclick = () => { tune(i); $("screen").scrollIntoView({ behavior: "smooth", block: "nearest" }); };
     $("chans").append(b);
+    return { ch: c, cells };
+  });
+  fillGuide();
+}
+function markOn() { rows.forEach((r, i) => r.cells[0].closest(".chan").classList.toggle("on", i === cur)); }
+
+function paintRow(r, progs) {
+  const t = nowSec();
+  r.cells.forEach((cell, k) => {
+    const p = progs[k], tm = cell.querySelector("time"), b = cell.querySelector("b");
+    cell.classList.toggle("wait", !p);
+    if (!p) { b.textContent = k ? "—" : "No signal"; tm.textContent = ""; return; }
+    tm.textContent = clockFmt(p.start);
+    b.textContent = p.m.title;
+    cell.title = `${p.m.title} · ${clockFmt(p.start)}–${clockFmt(p.end)}`;
+    if (k === 0) cell.querySelector(".bar i").style.width = Math.min(100, (t - p.start) / (p.end - p.start) * 100) + "%";
   });
 }
+let filling = null;
+function fillGuide() {
+  if (filling) return filling;
+  // Fill the channel you're watching first, then the rest top to bottom, one at a time
+  // so the Internet Archive isn't hit with everything at once.
+  const order = rows.map((_, i) => i).sort((a, b) => (b === cur) - (a === cur));
+  const list = rows;
+  filling = (async () => {
+    for (const i of order) {
+      if (list !== rows) break;
+      try { paintRow(list[i], await lineup(list[i].ch, nowSec(), 3)); }
+      catch { paintRow(list[i], []); }
+    }
+  })().finally(() => { filling = null; });
+  return filling;
+}
 
+// ---------- Tuning ----------
+function waitForNext(my) {
+  // The video ended (or isn't there yet) before its slot did: show static and the next show.
+  snow.style.opacity = "1";
+  clearTimeout(waitTimer);
+  const ms = Math.max(1000, (playing.end - nowSec()) * 1000);
+  waitTimer = setTimeout(() => { if (my === tuneId) tune(cur); }, ms);
+}
 async function tune(i) {
   const list = channels();
   cur = (i + list.length) % list.length; store.set("re_ch", cur);
   const ch = list[cur], my = ++tuneId;
-  renderGuide();
+  clearTimeout(waitTimer);
+  markOn();
   snow.style.opacity = "1";
-  showOSD("CH " + String(cur + 1).padStart(2, "0"), ch.name);
-  $("title").textContent = "Tuning in " + ch.name + "…"; $("meta").textContent = "";
+  showOSD("CH " + num(cur), ch.name);
+  $("title").textContent = "Tuning in " + ch.name + "…"; $("meta").textContent = ""; $("upnext").textContent = "";
   try {
-    const { m, offset, slot } = await whatsOn(ch);
+    const { p, next, offset } = await whatsOn(ch);
     if (my !== tuneId) return;
-    playingSlot = slot;
+    playing = p;
+    const m = p.m;
     vid.src = fileUrl(m);
-    vid.onloadedmetadata = () => { vid.currentTime = Math.min(offset, Math.max(0, vid.duration - 1)); vid.play().catch(() => {}); };
+    vid.onloadedmetadata = () => {
+      const want = nowSec() - p.start;
+      if (want >= vid.duration - 1) return waitForNext(my);
+      vid.currentTime = want; vid.play().catch(() => {});
+    };
     vid.onplaying = () => { if (my === tuneId) snow.style.opacity = "0"; };
-    vid.onended = () => { if (my === tuneId) tune(cur); };
+    vid.onended = () => { if (my !== tuneId) return; nowSec() < p.end - 2 ? waitForNext(my) : tune(cur); };
     vid.onerror = () => { if (my === tuneId) { metaCache[m.id] = null; setTimeout(() => tune(cur), 800); } };
     $("title").textContent = m.title;
-    $("meta").textContent = `${ch.name}${m.year ? " · " + m.year : ""} · ${fmt(offset)} of ${fmt(m.dur)}`;
+    $("meta").textContent = `${ch.name}${m.year ? " · " + m.year : ""} · ${clockFmt(p.start)}–${clockFmt(p.end)} · ${fmt(offset)} in`;
+    $("upnext").textContent = next ? `Up next at ${clockFmt(next.start)}: ${next.m.title}` : "";
     $("link").href = "https://archive.org/details/" + encodeURIComponent(m.id);
-    showOSD("CH " + String(cur + 1).padStart(2, "0"), ch.name + " — " + m.title);
+    showOSD("CH " + num(cur), ch.name + " — " + m.title);
   } catch {
     if (my !== tuneId) return;
+    playing = null;
     $("title").textContent = "Nothing but static on " + ch.name;
     $("meta").textContent = "The Internet Archive didn't answer, or this search has no videos. Try another channel.";
   }
 }
 
-// Keep in sync: when the 30-minute slot rolls over, retune.
+// Every few seconds: switch shows when the slot ends, keep the picture on schedule, tick the clock.
 setInterval(() => {
-  const slot = Math.floor((Date.now() / 1000 - EPOCH) / SLOT);
-  if (playingSlot !== null && slot !== playingSlot) tune(cur);
-  else if (!vid.paused) {
-    const ch = channels()[cur], m = metaCache[decodeURIComponent((vid.src.split("/download/")[1] || "").split("/")[0])];
-    if (m) $("meta").textContent = `${ch.name}${m.year ? " · " + m.year : ""} · ${fmt(vid.currentTime)} of ${fmt(m.dur)}`;
+  const t = nowSec();
+  $("clock").textContent = clockFmt(t);
+  if (!playing) return;
+  if (t >= playing.end) return tune(cur);
+  if (!vid.paused && !vid.seeking) {
+    const want = t - playing.start;
+    if (Math.abs(vid.currentTime - want) > 20 && want < vid.duration - 1) vid.currentTime = want; // caught up after buffering
+    const ch = channels()[cur], m = playing.m;
+    $("meta").textContent = `${ch.name}${m.year ? " · " + m.year : ""} · ${clockFmt(playing.start)}–${clockFmt(playing.end)} · ${fmt(vid.currentTime)} in`;
   }
 }, 5000);
+setInterval(fillGuide, 60000);
 
 function setMuted(m) { vid.muted = m; $("mute").textContent = m ? "Sound off" : "Sound on"; }
 $("power").onclick = () => { $("power").hidden = true; setMuted(false); vid.play().catch(() => {}); };
@@ -357,16 +509,32 @@ $("add").onsubmit = e => {
   const name = $("addName").value.trim(), q = $("addQuery").value.trim();
   if (!name || !q) return;
   custom.push({ name, q, desc: q }); store.set("re_custom", custom);
-  $("add").reset(); tune(channels().length - 1);
+  $("add").reset(); cur = channels().length - 1; renderGuide(); tune(cur);
 };
+
+// ---------- Suggestions (posted as GitHub issues on the project) ----------
+const REPO = "https://github.com/nickrowe38-lgtm/rabbit-ears";
+$("suggest").onsubmit = e => {
+  e.preventDefault();
+  const kind = $("sugKind").value, text = $("sugText").value.trim();
+  if (!text) return;
+  const title = `${kind}: ${text.split("\n")[0].slice(0, 70)}`;
+  const url = `${REPO}/issues/new?labels=suggestion&title=${encodeURIComponent(title)}&body=${encodeURIComponent(text + "\n\n_Sent from the Rabbit Ears suggestion box._")}`;
+  window.open(url, "_blank", "noopener");
+  $("suggest").reset();
+  $("sugDone").hidden = false;
+};
+
 document.addEventListener("keydown", e => {
-  if (e.target.tagName === "INPUT") return;
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
   if (e.key === "ArrowUp") { e.preventDefault(); tune(cur + 1); }
   else if (e.key === "ArrowDown") { e.preventDefault(); tune(cur - 1); }
   else if (e.key === "m") setMuted(!vid.muted);
   else if (/^[1-9]$/.test(e.key)) tune(+e.key - 1);
 });
 
+$("clock").textContent = clockFmt(nowSec());
+renderGuide();
 tune(cur);
 </script>
 </body>
