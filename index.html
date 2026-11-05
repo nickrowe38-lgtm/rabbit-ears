@@ -235,6 +235,9 @@ const BUILT_IN = [
   { name: "Gridiron",           desc: "College and high school football",  q: 'subject:"american football" OR subject:"college football"' },
   { name: "Rink Side",          desc: "Ice hockey games",                  q: 'subject:"ice hockey"' },
   { name: "Adult Swim",         desc: "Adult Swim shows and live streams", q: 'subject:"adult swim"' },
+  { name: "Y2K WB",             desc: "Early-2000s WB shows, promos, ads", q: '(subject:"the wb" OR title:"the wb" OR title:"(WB)" OR title:"WB commercials" OR title:"kids wb" OR title:"WB/WPIX" OR title:"gilmore girls") AND date:[1999-01-01 TO 2006-12-31] AND NOT title:(madonna OR township)' },
+  // The Archive has no Gilmore Girls episodes, so this is a hand-picked list of the real clips, promos and the Season 2 premiere tape.
+  { name: "Gilmore Girls",      desc: "Promos, clips and a Season 2 tape", q: "identifier:(turner_video_136082 OR cameo-by-scottpatterson-via-cameo OR NJY-011_422161-422459 OR NJY-011_710526-711428 OR NJY-011_740665-740962 OR studio-project-26_202304 OR spautx-Gilmore_Girls_Cast_Interviews_-_ATX_2015_Reunion OR bliptv-20131013-214814-AnyoneButMe-LizaWeilGilmoreGirlsBadGirlWantsHerABM920 OR MelissaMccarthyGilmoreGirls_20250425_1 OR NJY-011_393234-394135 OR dvd-d-vlc-media-player-2023-06-15-20-25-37 OR 20251208-083214 OR 20251122-201151 OR 20251208-083325 OR turner_video_136084 OR NJY-011_101520-101814 OR gilmore-girls-lost-episode-ending-15-vhs-edition OR NJY-011_72674-73582 OR turner_video_136081 OR wb-s-2-gilmore-girls-angel-and-abc-thieves OR turner_video_136083 OR youtube-z7S08wuL5Sg)" },
 ];
 // The schedule is built in 3-hour blocks. Each block starts at a seeded spot in the
 // channel's shuffled list and plays programs back to back, skipping any program that
@@ -325,7 +328,8 @@ async function buildBlock(ch, b) {
     const m = batch.shift(); scanned++;
     if (!m) continue;
     const left = end - t;
-    if (m.dur <= left) { items.push({ m, start: t, end: t + m.dur }); fitting.push(m); t += m.dur; skips = 0; }
+    if (m.dur > BLOCK && t === start) { items.push({ m, start: t, end }); t = end; } // extra-long tape: gets the whole block
+    else if (m.dur <= left) { items.push({ m, start: t, end: t + m.dur }); fitting.push(m); t += m.dur; skips = 0; }
     else if (left < 15 * 60 || ++skips > 15) { items.push({ m, start: t, end }); t = end; } // nothing fits: last show gets cut
   }
   if (!items.length) throw new Error("no playable");
